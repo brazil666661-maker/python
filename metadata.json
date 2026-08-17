@@ -1,0 +1,6 @@
+{
+  "name": "ILMHUB",
+  "description": "Online Python Code Editor, Real Python Runner, Interactive Terminal, Error Finder, and AI Coding Assistant",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
