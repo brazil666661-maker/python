@@ -112,7 +112,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         {
           id: `err_${Date.now()}`,
           role: 'assistant',
-          content: `⚠️ Error: ${err?.message || 'Could not connect to Gemini AI'}`,
+          content: `⚠️ Error: ${err?.message || 'Python assistant is unavailable right now.'}`,
           timestamp: Date.now(),
         },
       ]);
@@ -271,7 +271,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                 </span>
               )}
             </h3>
-            <p className="text-[10px] text-slate-400">Gemini Python Intelligence</p>
+            <p className="text-[10px] text-slate-400">Python-only assistant</p>
           </div>
         </div>
 
@@ -417,7 +417,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         {isLoading && (
           <div className="flex items-center space-x-2 text-slate-400 text-xs py-2 bg-[#0B1E33] p-2.5 rounded-lg border border-[#1E3A5F] animate-pulse">
             <Sparkles className="h-4 w-4 text-[#FFD43B] animate-spin" />
-            <span>Analyzing and reasoning with Gemini...</span>
+            <span>Analyzing your Python code…</span>
           </div>
         )}
       </div>

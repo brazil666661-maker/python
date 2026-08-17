@@ -446,50 +446,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }
                     className="w-full rounded-lg border border-[#1E3A5F] bg-[#07111F] p-2 text-slate-200 outline-none focus:border-[#FFD43B]"
                   >
-                    <option value="gemini-3.5-flash">gemini-3.5-flash (Balanced & Smart)</option>
-                    <option value="gemini-3.1-pro-preview">
-                      gemini-3.1-pro-preview (Complex Tasks & Deep Reasoning)
-                    </option>
-                    <option value="gemini-3.1-flash-lite">
-                      gemini-3.1-flash-lite (Ultra Fast)
-                    </option>
+                    <option value="python-only">Python-only assistant (No API key required)</option>
                   </select>
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-[#1E3A5F]/50">
                   <div>
-                    <span className="font-semibold text-slate-200">
-                      {t.settingsModal.aiThinking}
-                    </span>
+                    <span className="font-semibold text-slate-200">Python-only mode</span>
                     <p className="text-[11px] text-slate-400">
-                      Enables ThinkingLevel.HIGH on Gemini 3.1 Pro for deeper debugging
+                      AI guidance stays focused on Python execution and syntax.
                     </p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={localSettings.aiThinking}
-                    onChange={(e) =>
-                      setLocalSettings({ ...localSettings, aiThinking: e.target.checked })
-                    }
+                    checked={true}
+                    disabled
                     className="h-4 w-4 rounded accent-[#FFD43B]"
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-[#1E3A5F]/50">
                   <div>
-                    <span className="font-semibold text-slate-200">
-                      {t.settingsModal.aiSearchGrounding}
-                    </span>
+                    <span className="font-semibold text-slate-200">Search grounding</span>
                     <p className="text-[11px] text-slate-400">
-                      Ground AI with Google Search data for up-to-date Python libraries
+                      Disabled for offline, Python-only mode.
                     </p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={localSettings.aiSearchGrounding}
-                    onChange={(e) =>
-                      setLocalSettings({ ...localSettings, aiSearchGrounding: e.target.checked })
-                    }
+                    checked={false}
+                    disabled
                     className="h-4 w-4 rounded accent-[#FFD43B]"
                   />
                 </div>

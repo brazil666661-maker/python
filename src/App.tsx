@@ -49,9 +49,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   showTimestamps: true,
   timeoutSeconds: 10,
   maxOutputSizeKB: 1024,
-  aiModel: 'gemini-3.5-flash',
-  aiThinking: true,
-  aiSearchGrounding: true,
+  aiModel: 'python-only',
+  aiThinking: false,
+  aiSearchGrounding: false,
   aiResponseLanguage: 'en',
 };
 

@@ -2,7 +2,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
-import { GoogleGenAI } from '@google/genai';
 
 const getLanguageInstruction = (lang = 'en') => {
   switch (lang) {
@@ -200,24 +199,41 @@ async function runPythonCode({
   }
 }
 
-async function callGemini(prompt, systemText = '') {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return {
-      fallback: true,
-      text: 'GEMINI_API_KEY is not configured. Please add a valid API key in your Vercel environment settings.',
-    };
-  }
+function buildPythonAssistantFallback(code = '', promptType = 'explain') {
+  const trimmed = (code || '').trim();
+  const lines = trimmed ? trimmed.split(/\r?\n/) : ['print("Hello, ILMHUB!")'];
 
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: `${systemText}\n\n${prompt}`,
-    config: { responseMimeType: 'application/json' },
-  });
+  const overview =
+    promptType === 'fix'
+      ? 'Python-only assistant mode is active. This code is being analyzed without an external AI key, so the fix is based on the runtime logic and standard Python behavior.'
+      : 'Python-only assistant mode is active. This code is being reviewed without any external AI service, so the guidance is based on Python syntax and common execution patterns.';
 
-  const text = response?.text || '{}';
-  return { fallback: false, text };
+  return {
+    fallback: true,
+    text: JSON.stringify({
+      overview,
+      lineByLine: lines.map((line, index) => ({
+        line: String(index + 1),
+        explanation: `This line runs as Python code. Review it carefully for syntax and logic: ${line || 'blank line'}`,
+      })),
+      potentialIssues: [
+        'Make sure the code is valid Python syntax.',
+        'Check indentation and block structure when using loops or functions.',
+        'Verify names and values before indexing or calling methods.',
+      ],
+      improvements: [
+        'Keep code simple and readable.',
+        'Use descriptive variable names.',
+        'Add comments for logic that is not obvious.',
+      ],
+      summary: 'Python-only mode is enabled. No Gemini API key is required to run Python code in the editor.',
+      strengths: ['Focused on Python execution.', 'Works without external service keys.'],
+      issues: ['AI answers are local guidance only.'],
+      improvementsList: ['Use clear Python structure.', 'Test code in the terminal after each change.'],
+      fixedCode: trimmed || 'print("Hello, ILMHUB!")',
+      whyItFailed: 'This is local Python-only assistance. No API key is required for execution.',
+    }),
+  };
 }
 
 async function handleRun(req, res) {
@@ -255,11 +271,7 @@ async function handleExplain(req, res) {
   const code = body.selectedCode || body.code || '';
   const prompt = `You are ILMHUB's expert Python Coding Assistant.\n${getLanguageInstruction(lang)}\nExplain this Python code clearly and beginner-friendly:\n\n\`\`\`python\n${code}\n\`\`\``;
 
-  const result = await callGemini(prompt, 'Return valid JSON with keys: overview, lineByLine, potentialIssues, improvements.');
-  if (result.fallback) {
-    return res.status(200).json({ success: true, data: { overview: result.text, lineByLine: [], potentialIssues: [], improvements: [] } });
-  }
-
+  const result = buildPythonAssistantFallback(code, 'explain');
   try {
     const data = JSON.parse(result.text || '{}');
     return res.status(200).json({ success: true, data });
@@ -273,16 +285,12 @@ async function handleFix(req, res) {
   const lang = body.language || 'en';
   const prompt = `You are ILMHUB's smart Python debugger.\n${getLanguageInstruction(lang)}\nFix the bug in this Python code. Respond with JSON: { "fixedCode": "...", "summary": "...", "whyItFailed": "..." }\n\nOriginal code:\n\n\`\`\`python\n${body.code || ''}\n\`\`\`\n\nError:\n${JSON.stringify(body.error || {}, null, 2)}`;
 
-  const result = await callGemini(prompt);
-  if (result.fallback) {
-    return res.status(200).json({ success: true, data: { fixedCode: body.code || '', summary: result.text, whyItFailed: 'API key is missing.' } });
-  }
-
+  const result = buildPythonAssistantFallback(body.code || '', 'fix');
   try {
     const data = JSON.parse(result.text || '{}');
     return res.status(200).json({ success: true, data });
   } catch {
-    return res.status(200).json({ success: true, data: { fixedCode: body.code || '', summary: result.text, whyItFailed: 'Could not parse AI fix result.' } });
+    return res.status(200).json({ success: true, data: { fixedCode: body.code || '', summary: result.text, whyItFailed: 'Python-only assistant is active.' } });
   }
 }
 
@@ -291,16 +299,12 @@ async function handleGenerate(req, res) {
   const lang = body.language || 'en';
   const prompt = `You are ILMHUB code generator.\n${getLanguageInstruction(lang)}\nGenerate a complete Python example for this request:\n${body.prompt || ''}`;
 
-  const result = await callGemini(prompt);
-  if (result.fallback) {
-    return res.status(200).json({ success: true, data: { code: 'print("Hello, ILMHUB!")', explanation: result.text } });
-  }
-
+  const result = buildPythonAssistantFallback(body.prompt || 'print("Hello, ILMHUB!")', 'generate');
   try {
     const data = JSON.parse(result.text || '{}');
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({ success: true, data: { code: data.fixedCode || 'print("Hello, ILMHUB!")', explanation: data.overview || 'Python-only mode is active.' } });
   } catch {
-    return res.status(200).json({ success: true, data: { code: result.text || 'print("Hello, ILMHUB!")', explanation: 'Generated code sample.' } });
+    return res.status(200).json({ success: true, data: { code: 'print("Hello, ILMHUB!")', explanation: 'Python-only mode is active.' } });
   }
 }
 
@@ -309,16 +313,12 @@ async function handleReview(req, res) {
   const lang = body.language || 'en';
   const prompt = `You are ILMHUB Python reviewer.\n${getLanguageInstruction(lang)}\nReview this code and return valid JSON with keys: summary, strengths, issues, improvements.\n\n\`\`\`python\n${body.code || ''}\n\`\`\``;
 
-  const result = await callGemini(prompt);
-  if (result.fallback) {
-    return res.status(200).json({ success: true, data: { summary: result.text, strengths: [], issues: [], improvements: [] } });
-  }
-
+  const result = buildPythonAssistantFallback(body.code || '', 'review');
   try {
     const data = JSON.parse(result.text || '{}');
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({ success: true, data: { summary: data.summary || 'Python-only review mode is active.', strengths: data.strengths || [], issues: data.issues || [], improvements: data.improvementsList || [] } });
   } catch {
-    return res.status(200).json({ success: true, data: { summary: result.text, strengths: [], issues: [], improvements: [] } });
+    return res.status(200).json({ success: true, data: { summary: 'Python-only review mode is active.', strengths: [], issues: [], improvements: [] } });
   }
 }
 
@@ -329,12 +329,14 @@ async function handleChat(req, res) {
   const joined = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
   const prompt = `You are ILMHUB AI assistant.\n${getLanguageInstruction(lang)}\nCurrent code:\n\`\`\`python\n${body.currentCode || ''}\n\`\`\`\n\nCurrent error:\n${body.currentError || 'None'}\n\nConversation:\n${joined}`;
 
-  const result = await callGemini(prompt);
-  if (result.fallback) {
-    return res.status(200).json({ success: true, data: { content: result.text, modelUsed: 'gemini-2.5-flash', groundingUrls: [] } });
+  const result = buildPythonAssistantFallback(body.currentCode || '', 'chat');
+  try {
+    const data = JSON.parse(result.text || '{}');
+    const content = data.summary || data.overview || 'Python-only mode is active. No Gemini API key is required.';
+    return res.status(200).json({ success: true, data: { content, modelUsed: 'python-only', groundingUrls: [] } });
+  } catch {
+    return res.status(200).json({ success: true, data: { content: 'Python-only mode is active. No Gemini API key is required.', modelUsed: 'python-only', groundingUrls: [] } });
   }
-
-  return res.status(200).json({ success: true, data: { content: result.text, modelUsed: 'gemini-2.5-flash', groundingUrls: [] } });
 }
 
 export default async function handler(req, res) {
