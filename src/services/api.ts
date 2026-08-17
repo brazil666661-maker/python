@@ -8,10 +8,16 @@ import {
   AppLanguage,
 } from '../types';
 
+const apiUrl = (path: string) => {
+  if (typeof window === 'undefined') return path;
+  const origin = window.location?.origin || '';
+  return origin ? `${origin}${path}` : path;
+};
+
 export class ApiService {
   static async runCode(req: ExecutionRequest, lang: AppLanguage = 'en'): Promise<ExecutionResponse> {
     try {
-      const response = await fetch('/api/run', {
+      const response = await fetch(apiUrl('/api/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...req, lang }),
@@ -46,7 +52,7 @@ export class ApiService {
 
   static async stopExecution(processId: string): Promise<boolean> {
     try {
-      const response = await fetch('/api/stop', {
+      const response = await fetch(apiUrl('/api/stop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ processId }),
@@ -64,7 +70,7 @@ export class ApiService {
     selectedCode?: string,
     language: AppLanguage = 'en'
   ): Promise<AIExplainResponse> {
-    const response = await fetch('/api/ai/explain', {
+    const response = await fetch(apiUrl('/api/ai/explain'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, selectedCode, language }),
@@ -80,7 +86,7 @@ export class ApiService {
     error: any,
     language: AppLanguage = 'en'
   ): Promise<AIFixResponse> {
-    const response = await fetch('/api/ai/fix', {
+    const response = await fetch(apiUrl('/api/ai/fix'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, error, language }),
@@ -95,7 +101,7 @@ export class ApiService {
     prompt: string,
     language: AppLanguage = 'en'
   ): Promise<AIGenerateResponse> {
-    const response = await fetch('/api/ai/generate', {
+    const response = await fetch(apiUrl('/api/ai/generate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, language }),
@@ -110,7 +116,7 @@ export class ApiService {
     code: string,
     language: AppLanguage = 'en'
   ): Promise<AIReviewResponse> {
-    const response = await fetch('/api/ai/review', {
+    const response = await fetch(apiUrl('/api/ai/review'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, language }),
@@ -130,7 +136,7 @@ export class ApiService {
     thinking = false,
     searchGrounding = false
   ): Promise<{ content: string; modelUsed: string; groundingUrls: Array<{ title?: string; uri: string }> }> {
-    const response = await fetch('/api/ai/chat', {
+    const response = await fetch(apiUrl('/api/ai/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
