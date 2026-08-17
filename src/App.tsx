@@ -244,6 +244,11 @@ export default function App() {
     ]);
 
     try {
+      const trimmedCode = activeFile.content.trim();
+      if (!trimmedCode) {
+        throw new Error('Editor is empty. Paste or write Python code before running.');
+      }
+
       const auxFiles = files.map((f) => ({ name: f.name, content: f.content }));
 
       const result = await ApiService.runCode(

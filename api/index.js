@@ -238,8 +238,82 @@ function buildPythonAssistantFallback(code = '', promptType = 'explain') {
 
 async function handleRun(req, res) {
   const body = await getRequestBody(req);
+
+  if (!body || typeof body.code !== 'string' || body.code.trim() === '') {
+    return res.status(400).json({
+      success: false,
+      stdout: '',
+      stderr: 'Python code is required before execution.',
+      exit_code: 1,
+      execution_time: 0,
+      error: {
+        type: 'ValidationError',
+        message: 'Code is required and must be a non-empty string.',
+        file: 'main.py',
+        line: 1,
+        traceback: '',
+        simpleExplanation: 'The editor did not contain Python code to execute.',
+        suggestedFix: 'Paste Python code into the editor and click Run again.',
+      },
+    });
+  }
+
+  const pythonExecPath = process.env.PYTHON_EXECUTION_URL || '';
+  if (pythonExecPath) {
+    try {
+      const upstreamResponse = await fetch(`${pythonExecPath.replace(/\/$/, '')}/api/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: body.code,
+          filename: typeof body.filename === 'string' ? body.filename : 'main.py',
+          files: Array.isArray(body.files) ? body.files : [],
+          stdin: typeof body.stdin === 'string' ? body.stdin : undefined,
+          timeout: typeof body.timeout === 'number' ? body.timeout : 10,
+          maxOutputSize: typeof body.maxOutputSize === 'number' ? body.maxOutputSize : 1024 * 1024,
+          processId: typeof body.processId === 'string' ? body.processId : undefined,
+          lang: body.lang || 'en',
+        }),
+      });
+
+      const json = await upstreamResponse.json().catch(() => ({ success: false, stderr: 'Execution backend returned an invalid response.' }));
+      return res.status(upstreamResponse.ok ? 200 : 502).json(json);
+    } catch (error) {
+      console.error('Python execution backend proxy error:', error);
+      return res.status(502).json({
+        success: false,
+        stdout: '',
+        stderr: `Python execution backend is unreachable: ${error?.message || 'Unknown error'}`,
+        exit_code: 1,
+        execution_time: 0,
+        error: {
+          type: 'ExecutionServiceError',
+          message: 'Python execution backend is not configured or is unreachable.',
+          file: 'main.py',
+          line: 1,
+          traceback: '',
+          simpleExplanation: 'The application is configured to proxy execution to an external backend, but no valid backend is responding.',
+          suggestedFix: 'Set PYTHON_EXECUTION_URL to a real secure Python execution service and redeploy.',
+        },
+      });
+    }
+  }
+
+  if (!process.env.PYTHON_EXECUTION_URL && typeof process === 'object' && !!process && typeof process.env?.PATH === 'string') {
+    const commandCheck = spawn('python3', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    commandCheck.on('error', () => {
+      // do nothing - handled below
+    });
+
+    commandCheck.on('exit', (code) => {
+      if (code !== 0 && !commandCheck.killed) {
+        // handled in the fallback below via local result
+      }
+    });
+  }
+
   const result = await runPythonCode({
-    code: typeof body.code === 'string' ? body.code : '',
+    code: body.code,
     filename: typeof body.filename === 'string' ? body.filename : 'main.py',
     files: Array.isArray(body.files) ? body.files : [],
     stdin: typeof body.stdin === 'string' ? body.stdin : undefined,
@@ -248,6 +322,23 @@ async function handleRun(req, res) {
     processId: typeof body.processId === 'string' ? body.processId : undefined,
     lang: body.lang || 'en',
   });
+
+  if (!result.success && result.stderr && /Could not spawn Python process|Execution failed: spawn python3 ENOENT|No such file or directory/i.test(result.stderr)) {
+    return res.status(503).json({
+      ...result,
+      success: false,
+      stderr: 'Python runtime is not available in this deployment. Configure a secure external Python execution backend in Vercel.',
+      error: {
+        type: 'ExecutionServiceError',
+        message: 'Python runtime is not available in this deployment.',
+        file: 'main.py',
+        line: 1,
+        traceback: '',
+        simpleExplanation: 'The Vercel environment does not contain a Python interpreter, so this app cannot execute user code locally.',
+        suggestedFix: 'Set PYTHON_EXECUTION_URL to a real external Python execution service and redeploy.',
+      },
+    });
+  }
 
   return res.status(200).json(result);
 }

@@ -9,6 +9,14 @@ import {
 } from '../types';
 
 const apiUrl = (path: string) => {
+  const configuredBaseUrl = (typeof window !== 'undefined' && (window as any).__PYTHON_RUNNER_API_URL)
+    ? String((window as any).__PYTHON_RUNNER_API_URL)
+    : '';
+
+  if (configuredBaseUrl) {
+    return `${configuredBaseUrl.replace(/\/$/, '')}${path}`;
+  }
+
   if (typeof window === 'undefined') return path;
   const origin = window.location?.origin || '';
   return origin ? `${origin}${path}` : path;
@@ -17,11 +25,18 @@ const apiUrl = (path: string) => {
 export class ApiService {
   static async runCode(req: ExecutionRequest, lang: AppLanguage = 'en'): Promise<ExecutionResponse> {
     try {
+      const controller = new AbortController();
+      const timeoutMs = Math.max((req.timeout ?? 10) * 1000, 5000);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
       const response = await fetch(apiUrl('/api/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...req, lang }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timer);
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
@@ -31,20 +46,24 @@ export class ApiService {
       return await response.json();
     } catch (error: any) {
       console.error('Run API Error:', error);
+      const message = error?.name === 'AbortError'
+        ? `Execution request timed out after ${Math.max((req.timeout ?? 10), 5)} seconds.`
+        : error?.message || 'Could not connect to ILMHUB server';
+
       return {
         success: false,
         stdout: '',
-        stderr: `Network or Server Error: ${error?.message || 'Could not connect to ILMHUB server'}`,
+        stderr: `Network or Server Error: ${message}`,
         exit_code: 1,
         execution_time: 0,
         error: {
           type: 'ConnectionError',
-          message: error?.message || 'Failed to reach backend server',
+          message,
           file: req.filename || 'main.py',
           line: 1,
           traceback: error?.stack || '',
-          simpleExplanation: 'Unable to communicate with the ILMHUB execution server.',
-          suggestedFix: 'Check your internet connection and verify the backend is running.',
+          simpleExplanation: 'Unable to communicate with the Python execution backend.',
+          suggestedFix: 'Check your internet connection and verify the Python execution backend URL is configured in Vercel.',
         },
       };
     }
